@@ -12,13 +12,17 @@ uploaded_files = st.file_uploader("Upload XML files", type="xml", accept_multipl
 ei_input = st.text_input("Filter by EI (comma-separated, optional):")
 ei_values = [val.strip() for val in ei_input.split(",") if val.strip()]
 
-start_date = st.date_input("Start Date (TBD or later)")
-end_date = st.date_input("End Date (TED or earlier)")
-stay_date = st.date_input("Stay Date (must fall between TBD and TED)", value=None)
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("TBD After (optional)", value=None)
+with col2:
+    end_date = st.date_input("TED Before (optional)", value=None)
+
+stay_date = st.date_input("Stay Date (must be between TBD and TED, optional)", value=None)
 
 results = []
 
-if uploaded_files and start_date and end_date:
+if uploaded_files:
     for uploaded_file in uploaded_files:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp:
             tmp.write(uploaded_file.getvalue())
@@ -39,20 +43,21 @@ if uploaded_files and start_date and end_date:
             tbd = attributes.get("TBD")
             ted = attributes.get("TED")
 
-            if tbd and ted:
-                try:
-                    tbd_date = datetime.strptime(tbd, "%d-%b-%Y").date()
-                    ted_date = datetime.strptime(ted, "%d-%b-%Y").date()
+            try:
+                tbd_date = datetime.strptime(tbd, "%d-%b-%Y").date() if tbd else None
+                ted_date = datetime.strptime(ted, "%d-%b-%Y").date() if ted else None
+            except Exception as e:
+                st.warning(f"Skipping due to date format error in {uploaded_file.name}: {e}")
+                continue
 
-                    matches_main_range = start_date <= tbd_date and ted_date <= end_date
-                    matches_stay = stay_date is None or (tbd_date <= stay_date <= ted_date)
-                    matches_ei = not ei_values or ei in ei_values
+            # Apply filters only if provided
+            match_ei = not ei_values or (ei and ei in ei_values)
+            match_start = not start_date or (tbd_date and tbd_date >= start_date)
+            match_end = not end_date or (ted_date and ted_date <= end_date)
+            match_stay = not stay_date or (tbd_date and ted_date and tbd_date <= stay_date <= ted_date)
 
-                    if matches_main_range and matches_stay and matches_ei:
-                        results.append(attributes)
-
-                except Exception as e:
-                    st.warning(f"Skipping due to date error in {uploaded_file.name}: {e}")
+            if match_ei and match_start and match_end and match_stay:
+                results.append(attributes)
 
     if results:
         df = pd.DataFrame(results)
