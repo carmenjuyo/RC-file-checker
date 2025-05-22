@@ -5,18 +5,16 @@ import pandas as pd
 import tempfile
 import os
 
-st.title("XML Reservation Filter and Export to CSV")
+st.title("XML Reservation Filter & CSV Export")
 
-# Upload XML files
 uploaded_files = st.file_uploader("Upload XML files", type="xml", accept_multiple_files=True)
 
-# Optional EI filter
 ei_input = st.text_input("Filter by EI (comma-separated, optional):")
 ei_values = [val.strip() for val in ei_input.split(",") if val.strip()]
 
-# Required date filters
 start_date = st.date_input("Start Date (TBD or later)")
 end_date = st.date_input("End Date (TED or earlier)")
+stay_date = st.date_input("Stay Date (must fall between TBD and TED)", value=None)
 
 results = []
 
@@ -43,16 +41,19 @@ if uploaded_files and start_date and end_date:
 
             if tbd and ted:
                 try:
-                    tbd_date = datetime.strptime(tbd, "%d-%b-%Y")
-                    ted_date = datetime.strptime(ted, "%d-%b-%Y")
+                    tbd_date = datetime.strptime(tbd, "%d-%b-%Y").date()
+                    ted_date = datetime.strptime(ted, "%d-%b-%Y").date()
 
-                    if start_date <= tbd_date.date() and ted_date.date() <= end_date:
-                        if not ei_values or ei in ei_values:
-                            results.append(attributes)
+                    matches_main_range = start_date <= tbd_date and ted_date <= end_date
+                    matches_stay = stay_date is None or (tbd_date <= stay_date <= ted_date)
+                    matches_ei = not ei_values or ei in ei_values
+
+                    if matches_main_range and matches_stay and matches_ei:
+                        results.append(attributes)
+
                 except Exception as e:
-                    st.warning(f"Skipping entry due to date format error in {uploaded_file.name}: {e}")
+                    st.warning(f"Skipping due to date error in {uploaded_file.name}: {e}")
 
-    # Output
     if results:
         df = pd.DataFrame(results)
         st.success(f"{len(results)} matching records found.")
